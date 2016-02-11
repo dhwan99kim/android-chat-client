@@ -1,6 +1,7 @@
 package com.sophism.chatapp;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -10,15 +11,10 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.gson.FieldNamingPolicy;
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.internal.bind.DateTypeAdapter;
 import com.sophism.chatapp.dialogs.DialogSignIn;
 
 import org.json.JSONObject;
-
-import java.util.Date;
 
 import retrofit.Callback;
 import retrofit.RestAdapter;
@@ -26,7 +22,6 @@ import retrofit.RetrofitError;
 import retrofit.client.Response;
 import retrofit.converter.GsonConverter;
 import retrofit.http.Body;
-import retrofit.http.GET;
 import retrofit.http.Headers;
 import retrofit.http.POST;
 import retrofit.mime.TypedByteArray;
@@ -40,10 +35,18 @@ public class LoginActivity extends Activity implements View.OnClickListener{
     private static final String TAG = "Login";
     private EditText mEditTextID;
     private EditText mEditTextPW;
-
+    private AppUtil util;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        AppUtil.init(this);
+        util = AppUtil.getInstance();
+        if (util.getUserId() != null){
+            startService(new Intent(LoginActivity.this, SocketService.class));
+            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+            startActivity(intent);
+            this.finish();
+        }
         setContentView(R.layout.activity_login);
         mEditTextID = (EditText) findViewById(R.id.edittext_id);
         mEditTextPW = (EditText) findViewById(R.id.edittext_pw);
@@ -88,10 +91,13 @@ public class LoginActivity extends Activity implements View.OnClickListener{
 
                 @Override
                 public void success(String friend, Response response) {
+                    util.setUserId(mEditTextID.getText().toString());
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            Toast.makeText(LoginActivity.this, "Login Success", Toast.LENGTH_SHORT).show();
+                            startService(new Intent(LoginActivity.this, SocketService.class));
+                            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                            startActivity(intent);
                         }
                     });
                 }

@@ -4,14 +4,17 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.Window;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.gson.FieldNamingPolicy;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.internal.bind.DateTypeAdapter;
+import com.sophism.chatapp.dialogs.DialogSignIn;
 
 import org.json.JSONObject;
 
@@ -47,6 +50,8 @@ public class LoginActivity extends Activity implements View.OnClickListener{
 
         Button log_in_button = (Button) findViewById(R.id.log_in_button);
         log_in_button.setOnClickListener(this);
+        TextView sign_in_btn = (TextView) findViewById(R.id.sign_in_btn);
+        sign_in_btn.setOnClickListener(this);
     }
 
     @Override
@@ -54,6 +59,11 @@ public class LoginActivity extends Activity implements View.OnClickListener{
         switch (v.getId()){
             case R.id.log_in_button:
                 loginCheck();
+                break;
+            case R.id.sign_in_btn:
+                DialogSignIn dialog = new DialogSignIn(this);
+                dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+                dialog.show();
                 break;
         }
     }
@@ -103,10 +113,7 @@ public class LoginActivity extends Activity implements View.OnClickListener{
         }
     }
 
-    Gson gson = new GsonBuilder()
-            .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
-            .registerTypeAdapter(Date.class, new DateTypeAdapter())
-            .create();
+    Gson gson = AppUtil.getGson();
 
 
     public interface LoginService {

@@ -76,11 +76,7 @@ public class LoginActivity extends Activity implements View.OnClickListener{
             Toast.makeText(this,"Please Check USER ID or Password",Toast.LENGTH_SHORT).show();
             return;
         }
-        RestAdapter restAdapter = new RestAdapter.Builder()
-                .setLogLevel(RestAdapter.LogLevel.FULL)
-                .setEndpoint(AppDefine.CHAT_SERVER_URL)
-                .setConverter(new GsonConverter(gson))
-                .build();
+        RestAdapter restAdapter = AppUtil.getRestAdapter();
         try {
             JSONObject object = new JSONObject();
             object.put("user_id",mEditTextID.getText().toString());
@@ -118,9 +114,6 @@ public class LoginActivity extends Activity implements View.OnClickListener{
             e.printStackTrace();
         }
     }
-
-    Gson gson = AppUtil.getGson();
-
 
     public interface LoginService {
         @POST("/login/")

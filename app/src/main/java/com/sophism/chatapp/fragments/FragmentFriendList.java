@@ -4,6 +4,7 @@ import android.app.Fragment;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -12,15 +13,14 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.widget.BaseAdapter;
 import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 
 import com.github.nkzawa.emitter.Emitter;
 import com.github.nkzawa.socketio.client.Socket;
-import com.google.gson.Gson;
-import com.sophism.chatapp.AppDefine;
 import com.sophism.chatapp.AppUtil;
-import com.sophism.chatapp.MainActivity;
 import com.sophism.chatapp.MessagingActivity;
 import com.sophism.chatapp.R;
 import com.sophism.chatapp.SocketService;
@@ -33,7 +33,6 @@ import retrofit.Callback;
 import retrofit.RestAdapter;
 import retrofit.RetrofitError;
 import retrofit.client.Response;
-import retrofit.converter.GsonConverter;
 import retrofit.http.DELETE;
 import retrofit.http.GET;
 import retrofit.http.POST;
@@ -98,14 +97,9 @@ public class FragmentFriendList extends Fragment {
             }
         }
     };
-    Gson gson = AppUtil.getGson();
 
     private void getFriendList(){
-        RestAdapter restAdapter = new RestAdapter.Builder()
-                .setLogLevel(RestAdapter.LogLevel.FULL)
-                .setEndpoint(AppDefine.CHAT_SERVER_URL)
-                .setConverter(new GsonConverter(gson))
-                .build();
+        RestAdapter restAdapter = AppUtil.getRestAdapter();
 
         try {
             restAdapter.create(GetFriendListService.class).friendsItems(util.getUserId(),new Callback<List<Friend>>() {
@@ -132,11 +126,7 @@ public class FragmentFriendList extends Fragment {
     }
 
     private void addFriendList(String myId, String targetId){
-        RestAdapter restAdapter = new RestAdapter.Builder()
-                .setLogLevel(RestAdapter.LogLevel.FULL)
-                .setEndpoint(AppDefine.CHAT_SERVER_URL)
-                .setConverter(new GsonConverter(gson))
-                .build();
+        RestAdapter restAdapter = AppUtil.getRestAdapter();
         try {
             restAdapter.create(AddFriendListService.class).addFriend(myId,targetId, new Callback<Friend>() {
 
@@ -156,15 +146,11 @@ public class FragmentFriendList extends Fragment {
         }
     }
 
-    private void delFriendList(String myId, String targetId){
-        RestAdapter restAdapter = new RestAdapter.Builder()
-                .setLogLevel(RestAdapter.LogLevel.FULL)
-                .setEndpoint(AppDefine.CHAT_SERVER_URL)
-                .setConverter(new GsonConverter(gson))
-                .build();
+    private void delFriendList(String targetId){
+        RestAdapter restAdapter = AppUtil.getRestAdapter();
         try {
 
-            restAdapter.create(DeleteFriendListService.class).deleteFriend(myId,targetId, new Callback<Friend>() {
+            restAdapter.create(DeleteFriendListService.class).deleteFriend(util.getUserId(),targetId, new Callback<Friend>() {
 
                 @Override
                 public void success(Friend friend, Response response) {
@@ -241,17 +227,29 @@ public class FragmentFriendList extends Fragment {
             if (convertView == null) {
                 holder = new ViewHolder();
                 convertView = mInflater.inflate(R.layout.list_item_friend, parent, false);
+                holder.chat_friend_holder = (LinearLayout) convertView.findViewById((R.id.chat_friend_holder));
+                holder.chat_friend_avatar = (ImageView) convertView.findViewById((R.id.chat_friend_avatar));
                 holder.chat_friend_name = (TextView) convertView.findViewById(R.id.chat_friend_name);
                 convertView.setTag(holder);
             }else {
                 holder = (ViewHolder) convertView.getTag();
             }
+
+            holder.chat_friend_avatar.setImageBitmap(AppUtil.getRoundedCroppedBitmap(BitmapFactory.decodeResource(getResources(),
+                    R.drawable.noavatar)));
             holder.chat_friend_name.setText(mFriendList.get(position));
-            holder.chat_friend_name.setOnClickListener(new View.OnClickListener() {
+            holder.chat_friend_holder.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    mSocket.emit("invite",mFriendList.get(position));
+                    mSocket.emit("invite", mFriendList.get(position));
 
+                }
+            });
+            holder.chat_friend_holder.setOnLongClickListener(new View.OnLongClickListener() {
+                @Override
+                public boolean onLongClick(View v) {
+                    delFriendList(mFriendList.get(position));
+                    return false;
                 }
             });
             return convertView;
@@ -259,6 +257,8 @@ public class FragmentFriendList extends Fragment {
 
         class ViewHolder {
             TextView chat_friend_name;
+            ImageView chat_friend_avatar;
+            LinearLayout chat_friend_holder;
         }
     }
 }

@@ -15,10 +15,7 @@ import android.widget.TextView;
 
 import com.github.nkzawa.emitter.Emitter;
 import com.github.nkzawa.socketio.client.Socket;
-import com.google.gson.Gson;
-import com.sophism.chatapp.AppDefine;
 import com.sophism.chatapp.AppUtil;
-import com.sophism.chatapp.MainActivity;
 import com.sophism.chatapp.MessagingActivity;
 import com.sophism.chatapp.R;
 import com.sophism.chatapp.SocketService;
@@ -33,7 +30,6 @@ import retrofit.Callback;
 import retrofit.RestAdapter;
 import retrofit.RetrofitError;
 import retrofit.client.Response;
-import retrofit.converter.GsonConverter;
 import retrofit.http.GET;
 import retrofit.http.Path;
 
@@ -113,14 +109,8 @@ public class FragmentMessagingList extends Fragment {
         }
     };
 
-    Gson gson = AppUtil.getGson();
-
-    private void getRoomList(){
-        RestAdapter restAdapter = new RestAdapter.Builder()
-                .setLogLevel(RestAdapter.LogLevel.FULL)
-                .setEndpoint(AppDefine.CHAT_SERVER_URL)
-                .setConverter(new GsonConverter(gson))
-                .build();
+     private void getRoomList(){
+        RestAdapter restAdapter = AppUtil.getRestAdapter();
 
         try {
             restAdapter.create(GetRoomListService.class).friendsItems(util.getUserId(),new Callback<List<MessagingRoomInfo>>() {

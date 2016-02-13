@@ -1,12 +1,15 @@
 package com.sophism.chatapp.fragments;
 
+import android.app.ActivityManager;
 import android.app.Fragment;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.LruCache;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,9 +21,14 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import com.bumptech.glide.load.resource.drawable.GlideDrawable;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.target.Target;
 import com.github.nkzawa.emitter.Emitter;
 import com.github.nkzawa.socketio.client.Socket;
+import com.sophism.chatapp.AppDefine;
 import com.sophism.chatapp.AppUtil;
+import com.sophism.chatapp.DownloadImageTask;
 import com.sophism.chatapp.MessagingActivity;
 import com.sophism.chatapp.R;
 import com.sophism.chatapp.SocketService;
@@ -44,13 +52,19 @@ import retrofit.http.Path;
 public class FragmentFriendList extends Fragment {
 
     private final String TAG = "FriendList";
-    AppUtil util;
+    private AppUtil util;
+    private Context mContext;
     private ArrayList<String> mFriendList;
     private FriendListAdapter mAdapter;
     private Socket mSocket = SocketService.mSocket;
+    private LruCache<String, Bitmap> mMemoryCache;
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         ViewGroup rootView = (ViewGroup) inflater.inflate(R.layout.fragment_friend_list, container, false);
+        mContext = getActivity();
+        final int memClass = ((ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE)).getMemoryClass();
+        final int cacheSize = 1024 * 1024 * memClass;
+        mMemoryCache = new LruCache<>(cacheSize);
         util = AppUtil.getInstance();
         mFriendList = new ArrayList<>();
         ListView listview_friend = (ListView) rootView.findViewById(R.id.listview_friend);
@@ -79,6 +93,8 @@ public class FragmentFriendList extends Fragment {
         mSocket.on("open room", onOpenRoom);
         return rootView;
     }
+
+
     private Emitter.Listener onOpenRoom = new Emitter.Listener() {
         @Override
         public void call(final Object... args) {
@@ -100,7 +116,6 @@ public class FragmentFriendList extends Fragment {
 
     private void getFriendList(){
         RestAdapter restAdapter = AppUtil.getRestAdapter();
-
         try {
             restAdapter.create(GetFriendListService.class).friendsItems(util.getUserId(),new Callback<List<Friend>>() {
 
@@ -197,6 +212,11 @@ public class FragmentFriendList extends Fragment {
         );
     }
 
+    public interface GetProfileImageService {
+        @GET("/users/{id}/avatar")
+        Response getProfileImage(@Path("id") String id);
+    }
+
     public class FriendListAdapter extends BaseAdapter
 
     {
@@ -234,9 +254,17 @@ public class FragmentFriendList extends Fragment {
             }else {
                 holder = (ViewHolder) convertView.getTag();
             }
-
             holder.chat_friend_avatar.setImageBitmap(AppUtil.getRoundedCroppedBitmap(BitmapFactory.decodeResource(getResources(),
                     R.drawable.noavatar)));
+            Log.d("Donghwan", AppDefine.CHAT_SERVER_URL + "/users/" + util.getUserId() + "/avatar");
+
+            Bitmap bitmap = mMemoryCache.get(mFriendList.get(position));
+            if (bitmap == null) {
+                new DownloadImageTask(holder.chat_friend_avatar, mMemoryCache, true).execute(AppDefine.CHAT_SERVER_URL + "/users/" + mFriendList.get(position) + "/avatar");
+            } else {
+                Log.d("Donghwan", "get cache ");
+                holder.chat_friend_avatar.setImageBitmap(bitmap);
+            }
             holder.chat_friend_name.setText(mFriendList.get(position));
             holder.chat_friend_holder.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -253,6 +281,8 @@ public class FragmentFriendList extends Fragment {
                 }
             });
             return convertView;
+
+
         }
 
         class ViewHolder {

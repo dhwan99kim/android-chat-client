@@ -11,8 +11,6 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.gson.Gson;
-import com.sophism.chatapp.AppDefine;
 import com.sophism.chatapp.AppUtil;
 import com.sophism.chatapp.R;
 
@@ -22,7 +20,6 @@ import retrofit.Callback;
 import retrofit.RestAdapter;
 import retrofit.RetrofitError;
 import retrofit.client.Response;
-import retrofit.converter.GsonConverter;
 import retrofit.http.Body;
 import retrofit.http.Headers;
 import retrofit.http.POST;
@@ -73,11 +70,7 @@ public class DialogSignIn  extends Dialog {
 
     }
     private void signIn(){
-        RestAdapter restAdapter = new RestAdapter.Builder()
-                .setLogLevel(RestAdapter.LogLevel.FULL)
-                .setEndpoint(AppDefine.CHAT_SERVER_URL)
-                .setConverter(new GsonConverter(gson))
-                .build();
+        RestAdapter restAdapter = AppUtil.getRestAdapter();
         try {
             JSONObject object = new JSONObject();
             object.put("user_id",mEditTextID.getText().toString());
@@ -126,8 +119,6 @@ public class DialogSignIn  extends Dialog {
             e.printStackTrace();
         }
     }
-
-    Gson gson = AppUtil.getGson();
 
 
     public interface SignService {

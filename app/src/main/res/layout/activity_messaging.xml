@@ -22,7 +22,13 @@
         android:paddingRight="10dp"
         android:orientation="horizontal"
         android:gravity="center_vertical">
-
+        <ImageView
+            android:id="@+id/file_upload_btn"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginRight="5dp"
+            android:src="@drawable/file_ico"
+            android:contentDescription="Send"/>
         <EditText
             android:id="@+id/message_input"
             android:layout_width="0dp"

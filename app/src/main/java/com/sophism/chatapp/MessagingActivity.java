@@ -2,9 +2,14 @@ package com.sophism.chatapp;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.provider.MediaStore;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.text.Editable;
@@ -20,16 +25,32 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.github.nkzawa.emitter.Emitter;
 import com.github.nkzawa.socketio.client.Socket;
 import com.sophism.chatapp.data.ChatMessage;
 import com.sophism.chatapp.R;
+import com.squareup.okhttp.OkHttpClient;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+
+import retrofit.Callback;
+import retrofit.RestAdapter;
+import retrofit.RetrofitError;
+import retrofit.client.OkClient;
+import retrofit.client.Response;
+import retrofit.converter.GsonConverter;
+import retrofit.http.Multipart;
+import retrofit.http.POST;
+import retrofit.http.Part;
+import retrofit.http.Path;
+import retrofit.mime.TypedFile;
 
 /**
  * Created by D.H.KIM on 2016. 2. 11.
@@ -37,8 +58,11 @@ import java.util.List;
 public class MessagingActivity extends Activity{
 
     private static final String TAG = "Messaging";
+    private final int RESULT_LOAD_IMG = 1;
+
     private static final int TYPING_TIMER_LENGTH = 600;
     private static final int INVALID = -1;
+    private AppUtil util;
     private Context mContext;
     private RecyclerView mMessagesView;
     private EditText mInputMessageView;
@@ -53,6 +77,7 @@ public class MessagingActivity extends Activity{
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         mContext = this;
+        util = AppUtil.getInstance();
         setContentView(R.layout.activity_messaging);
         mAdapter = new MessageAdapter(this, mMessages);
         mSocket.on(Socket.EVENT_CONNECT_ERROR, onConnectError);
@@ -96,7 +121,7 @@ public class MessagingActivity extends Activity{
 
                 if (!mTyping) {
                     mTyping = true;
-                    mSocket.emit("typing",mRoomId);
+                    mSocket.emit("typing", mRoomId);
                 }
 
                 mTypingHandler.removeCallbacks(onTypingTimeout);
@@ -116,9 +141,93 @@ public class MessagingActivity extends Activity{
             }
         });
 
+        ImageView file_upload_btn = (ImageView) findViewById(R.id.file_upload_btn);
+        file_upload_btn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent galleryIntent = new Intent(Intent.ACTION_PICK,
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                startActivityForResult(galleryIntent, RESULT_LOAD_IMG);
+            }
+        });
         getMessages(mRoomId);
 
     }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        try {
+            // When an Image is picked
+            if (requestCode == RESULT_LOAD_IMG && resultCode == RESULT_OK
+                    && null != data) {
+                Uri selectedImage = data.getData();
+                String[] filePathColumn = { MediaStore.Images.Media.DATA };
+
+                // Get the cursor
+                Cursor cursor = getContentResolver().query(selectedImage,
+                        filePathColumn, null, null, null);
+                // Move to first row
+                if (cursor != null) {
+                    cursor.moveToFirst();
+                }
+
+                int columnIndex;
+                String imgDecodableString;
+                if (cursor != null) {
+                    columnIndex = cursor.getColumnIndex(filePathColumn[0]);
+                    imgDecodableString = cursor.getString(columnIndex);
+                    Log.d("Donghwan","path - "+imgDecodableString);
+                    cursor.close();
+                }else
+                    return;
+                RestAdapter restAdapter = new RestAdapter.Builder()
+                        .setLogLevel(RestAdapter.LogLevel.FULL)
+                        .setClient(new OkClient(new OkHttpClient()))
+                        .setEndpoint(AppDefine.CHAT_SERVER_URL)
+                        .build();
+                try {
+                    TypedFile typedFile = new TypedFile("multipart/form-data", new File(imgDecodableString));
+                    String description = "hello, this is description speaking";
+                    restAdapter.create(FileUploadService.class).upload(util.getUserId(),typedFile, description,  new Callback<String>() {
+
+                        @Override
+                        public void success(String s, Response response) {
+
+                            Log.d(TAG, "Success");
+                        }
+
+                        @Override
+                        public void failure(RetrofitError error) {
+
+                            Log.d(TAG, error.toString());
+                        }
+                    });
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
+
+            } else {
+                Toast.makeText(this, "You haven't picked Image",
+                        Toast.LENGTH_LONG).show();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Something went wrong", Toast.LENGTH_LONG)
+                    .show();
+        }
+
+    }
+
+    public interface FileUploadService {
+        @Multipart
+        @POST("/users/{id}/avatar")
+        void upload(@Path("id")String id,
+                    @Part("myfile") TypedFile file,
+                    @Part("description") String description,
+                    Callback<String> callback);
+    }
+
     private void addLog(String message) {
         mMessages.add(new ChatMessage.Builder(ChatMessage.TYPE_LOG)
                 .message(message).build());

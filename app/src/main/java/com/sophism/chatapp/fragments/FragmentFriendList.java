@@ -21,9 +21,6 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 
-import com.bumptech.glide.load.resource.drawable.GlideDrawable;
-import com.bumptech.glide.request.RequestListener;
-import com.bumptech.glide.request.target.Target;
 import com.github.nkzawa.emitter.Emitter;
 import com.github.nkzawa.socketio.client.Socket;
 import com.sophism.chatapp.AppDefine;
@@ -41,6 +38,7 @@ import retrofit.Callback;
 import retrofit.RestAdapter;
 import retrofit.RetrofitError;
 import retrofit.client.Response;
+import retrofit.http.Body;
 import retrofit.http.DELETE;
 import retrofit.http.GET;
 import retrofit.http.POST;
@@ -82,7 +80,7 @@ public class FragmentFriendList extends Fragment {
                     public void onDismiss(DialogInterface dialog) {
                         String input = dialogInputText.getValue();
                         if (input != null && input.length() != 0)
-                            addFriendList("sophism", input);
+                            addFriendList(util.getUserId(), input);
                     }
                 });
                 dialogInputText.show();
@@ -143,7 +141,7 @@ public class FragmentFriendList extends Fragment {
     private void addFriendList(String myId, String targetId){
         RestAdapter restAdapter = AppUtil.getRestAdapter();
         try {
-            restAdapter.create(AddFriendListService.class).addFriend(myId,targetId, new Callback<Friend>() {
+            restAdapter.create(AddFriendListService.class).addFriend("",myId,targetId, new Callback<Friend>() {
 
                 @Override
                 public void success(Friend friend, Response response) {
@@ -198,7 +196,7 @@ public class FragmentFriendList extends Fragment {
         @POST("/friends/{id}/{target}")
             //@Headers({"Content-Type: application/json;charset=UTF-8"})
         void addFriend(
-                //@Body TypedInput object,
+                @Body String emptyString,
                 @Path("id")String id, @Path("target")String targetId,
                 Callback<Friend> callback
         );
@@ -210,11 +208,6 @@ public class FragmentFriendList extends Fragment {
                 @Path("id")String id, @Path("target")String targetId,
                 Callback<Friend> target
         );
-    }
-
-    public interface GetProfileImageService {
-        @GET("/users/{id}/avatar")
-        Response getProfileImage(@Path("id") String id);
     }
 
     public class FriendListAdapter extends BaseAdapter

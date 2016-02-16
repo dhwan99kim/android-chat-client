@@ -40,7 +40,9 @@ public class DownloadImageTask extends AsyncTask<String, Void, Bitmap> {
     }
 
     protected void onPostExecute(Bitmap result) {
-        if (isRounded){
+        if (result == null){
+            bmImage.setImageResource(R.drawable.noavatar);
+        }else if (isRounded){
             bmImage.setImageBitmap(AppUtil.getRoundedCroppedBitmap(result));
         }else{
             bmImage.setImageBitmap(result);

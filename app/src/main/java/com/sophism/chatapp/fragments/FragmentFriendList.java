@@ -55,14 +55,12 @@ public class FragmentFriendList extends Fragment {
     private ArrayList<String> mFriendList;
     private FriendListAdapter mAdapter;
     private Socket mSocket = SocketService.mSocket;
-    private LruCache<String, Bitmap> mMemoryCache;
+
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         ViewGroup rootView = (ViewGroup) inflater.inflate(R.layout.fragment_friend_list, container, false);
         mContext = getActivity();
-        final int memClass = ((ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE)).getMemoryClass();
-        final int cacheSize = 1024 * 1024 * memClass;
-        mMemoryCache = new LruCache<>(cacheSize);
+
         util = AppUtil.getInstance();
         mFriendList = new ArrayList<>();
         ListView listview_friend = (ListView) rootView.findViewById(R.id.listview_friend);
@@ -247,13 +245,10 @@ public class FragmentFriendList extends Fragment {
             }else {
                 holder = (ViewHolder) convertView.getTag();
             }
-            holder.chat_friend_avatar.setImageBitmap(AppUtil.getRoundedCroppedBitmap(BitmapFactory.decodeResource(getResources(),
-                    R.drawable.noavatar)));
-            Log.d("Donghwan", AppDefine.CHAT_SERVER_URL + "/users/" + util.getUserId() + "/avatar");
-
-            Bitmap bitmap = mMemoryCache.get(mFriendList.get(position));
+            String profile_url = AppDefine.CHAT_SERVER_URL + "/users/" + mFriendList.get(position) + "/avatar";
+            Bitmap bitmap = AppUtil.sImageCashe.get(profile_url);
             if (bitmap == null) {
-                new DownloadImageTask(holder.chat_friend_avatar, mMemoryCache, true).execute(AppDefine.CHAT_SERVER_URL + "/users/" + mFriendList.get(position) + "/avatar");
+                new DownloadImageTask(getActivity(), holder.chat_friend_avatar, true).execute(profile_url);
             } else {
                 Log.d("Donghwan", "get cache ");
                 holder.chat_friend_avatar.setImageBitmap(bitmap);

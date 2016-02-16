@@ -1,5 +1,6 @@
 package com.sophism.chatapp;
 
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -9,6 +10,7 @@ import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.media.ExifInterface;
+import android.util.LruCache;
 
 import com.google.gson.FieldNamingPolicy;
 import com.google.gson.Gson;
@@ -34,6 +36,7 @@ public class AppUtil {
     private SharedPreferences mPreference = null;
     private SharedPreferences.Editor mEditor = null;
 
+    public static LruCache<String, Bitmap> sImageCashe;
 
 
     private AppUtil(){
@@ -64,6 +67,9 @@ public class AppUtil {
 
     public static void init(Context context){
         mContext = context;
+        final int memClass = ((ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE)).getMemoryClass();
+        final int cacheSize = 1024 * 1024 * memClass;
+        sImageCashe = new LruCache<>(cacheSize);
     }
 
     public void setUserId(String userId){

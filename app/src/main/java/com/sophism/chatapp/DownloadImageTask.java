@@ -1,5 +1,6 @@
 package com.sophism.chatapp;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
@@ -13,17 +14,16 @@ import java.io.InputStream;
  */
 public class DownloadImageTask extends AsyncTask<String, Void, Bitmap> {
     ImageView bmImage;
-    LruCache cache;
-    boolean isRounded;
-    public DownloadImageTask(ImageView bmImage, LruCache cache) {
+    Context context;
+    boolean isProfile;
+    public DownloadImageTask(ImageView bmImage) {
         this.bmImage = bmImage;
-        this.cache = cache;
-        isRounded = false;
+        isProfile = false;
     }
-    public DownloadImageTask(ImageView bmImage, LruCache cache, boolean isRounded) {
+    public DownloadImageTask(Context context, ImageView bmImage, boolean isProfile) {
+        this.context = context;
         this.bmImage = bmImage;
-        this.cache = cache;
-        this.isRounded = isRounded;
+        this.isProfile = isProfile;
     }
     protected Bitmap doInBackground(String... urls) {
         String urldisplay = urls[0];
@@ -34,16 +34,19 @@ public class DownloadImageTask extends AsyncTask<String, Void, Bitmap> {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        if (urldisplay != null & mIcon1 != null)
-            cache.put(urldisplay,mIcon1);
+        if (urldisplay != null & mIcon1 != null) {
+            if (isProfile){
+                mIcon1 = AppUtil.getRoundedCroppedBitmap(mIcon1);
+            }
+            AppUtil.sImageCashe.put(urldisplay, mIcon1);
+        }
         return mIcon1;
     }
 
     protected void onPostExecute(Bitmap result) {
-        if (result == null){
-            bmImage.setImageResource(R.drawable.noavatar);
-        }else if (isRounded){
-            bmImage.setImageBitmap(AppUtil.getRoundedCroppedBitmap(result));
+        if (result == null && isProfile){
+            bmImage.setImageBitmap(AppUtil.getRoundedCroppedBitmap(BitmapFactory.decodeResource(context.getResources(),
+                    R.drawable.noavatar)));
         }else{
             bmImage.setImageBitmap(result);
         }

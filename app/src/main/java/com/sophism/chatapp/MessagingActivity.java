@@ -70,7 +70,7 @@ public class MessagingActivity extends Activity{
     private RecyclerView.Adapter mAdapter;
     private boolean mTyping = false;
     private Handler mTypingHandler = new Handler();
-    private String mUsername = "sophism";
+    private String mUsername = AppUtil.getInstance().getUserId();
     private int mRoomId = INVALID;
     private Socket mSocket = SocketService.mSocket;
     @Override
@@ -177,7 +177,6 @@ public class MessagingActivity extends Activity{
                 if (cursor != null) {
                     columnIndex = cursor.getColumnIndex(filePathColumn[0]);
                     imgDecodableString = cursor.getString(columnIndex);
-                    Log.d("Donghwan","path - "+imgDecodableString);
                     cursor.close();
                 }else
                     return;
@@ -188,13 +187,20 @@ public class MessagingActivity extends Activity{
                         .build();
                 try {
                     TypedFile typedFile = new TypedFile("multipart/form-data", new File(imgDecodableString));
-                    String description = "hello, this is description speaking";
-                    restAdapter.create(FileUploadService.class).upload(util.getUserId(),typedFile, description,  new Callback<String>() {
+                    restAdapter.create(FileUploadService.class).upload(typedFile,  new Callback<Result>() {
 
                         @Override
-                        public void success(String s, Response response) {
+                        public void success(Result s, Response response) {
+                            try {
+                                String path = AppDefine.CHAT_SERVER_URL+"/files/"+s.url;
+                                mSocket.emit("new message", "image", path, mRoomId);
+                                addMessage("image", mUsername, path);
+                                insertDB(mUsername, mUsername, "image", mRoomId, path);
+                                Log.d(TAG, "Success");
+                            }catch(Exception e){
+                                e.printStackTrace();
+                            }
 
-                            Log.d(TAG, "Success");
                         }
 
                         @Override
@@ -219,7 +225,63 @@ public class MessagingActivity extends Activity{
 
     }
 
+    private void uploadProfileImage(Intent data){
+        Uri selectedImage = data.getData();
+        String[] filePathColumn = { MediaStore.Images.Media.DATA };
+
+        // Get the cursor
+        Cursor cursor = getContentResolver().query(selectedImage,
+                filePathColumn, null, null, null);
+        // Move to first row
+        if (cursor != null) {
+            cursor.moveToFirst();
+        }
+
+        int columnIndex;
+        String imgDecodableString;
+        if (cursor != null) {
+            columnIndex = cursor.getColumnIndex(filePathColumn[0]);
+            imgDecodableString = cursor.getString(columnIndex);
+            cursor.close();
+        }else
+            return;
+        RestAdapter restAdapter = new RestAdapter.Builder()
+                .setLogLevel(RestAdapter.LogLevel.FULL)
+                .setClient(new OkClient(new OkHttpClient()))
+                .setEndpoint(AppDefine.CHAT_SERVER_URL)
+                .build();
+        try {
+            TypedFile typedFile = new TypedFile("multipart/form-data", new File(imgDecodableString));
+            String description = "hello, this is description speaking";
+            restAdapter.create(AvatarUploadService.class).upload(util.getUserId(),typedFile, description,  new Callback<String>() {
+
+                @Override
+                public void success(String s, Response response) {
+
+                    Log.d(TAG, "Success");
+                }
+
+                @Override
+                public void failure(RetrofitError error) {
+
+                    Log.d(TAG, error.toString());
+                }
+            });
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+    }
     public interface FileUploadService {
+        @Multipart
+        @POST("/files/")
+        void upload(@Part("myfile") TypedFile file,
+                    Callback<Result> callback);
+    }
+
+    public class Result{
+        public String url;
+    }
+    public interface AvatarUploadService {
         @Multipart
         @POST("/users/{id}/avatar")
         void upload(@Path("id")String id,
@@ -236,12 +298,20 @@ public class MessagingActivity extends Activity{
     }
 
     private void addParticipantsLog(int numUsers) {
-        addLog(numUsers+"명의 참가자가 있습니다");
+        addLog(numUsers + "명의 참가자가 있습니다");
     }
 
-    private void addMessage(String username, String message) {
-        mMessages.add(new ChatMessage.Builder(ChatMessage.TYPE_MESSAGE)
-                .username(username).message(message).build());
+    private void addMessage( String username, String message) {
+        addMessage("text", username, message);
+    }
+    private void addMessage(String type, String username, String message) {
+        if (type.equals("text")) {
+            mMessages.add(new ChatMessage.Builder(ChatMessage.TYPE_MESSAGE)
+                    .username(username).message(message).build());
+        }else if (type.equals("image")){
+            mMessages.add(new ChatMessage.Builder(ChatMessage.TYPE_IMAGE)
+                    .username(username).message(message).build());
+        }
         mAdapter.notifyItemInserted(mMessages.size() - 1);
         scrollToBottom();
     }
@@ -279,8 +349,8 @@ public class MessagingActivity extends Activity{
         addMessage(mUsername, message);
 
         // perform the sending message attempt.
-        mSocket.emit("new message", message, mRoomId);
-        insertDB(mUsername,mUsername,mRoomId,message);
+        mSocket.emit("new message", "text", message, mRoomId);
+        insertDB(mUsername,mUsername,"text",mRoomId,message);
     }
 
     private void leave() {
@@ -307,20 +377,21 @@ public class MessagingActivity extends Activity{
                 public void run() {
 
                     JSONObject data = (JSONObject) args[0];
-                    String username;
-                    String message;
+                    String username, message, type;
                     int roomId;
                     try {
                         username = data.getString("username");
                         message = data.getString("message");
-                        roomId =  Integer.parseInt(data.getString("roomId"));
+                        type = data.getString("type");
+                        roomId = Integer.parseInt(data.getString("roomId"));
                     } catch (JSONException e) {
                         e.printStackTrace();
                         return;
                     }
                     removeTyping(username);
-                    if (roomId == mRoomId)
-                        addMessage(username, message);
+                    if (roomId == mRoomId) {
+                        addMessage(type, username, message);
+                    }
                 }
             });
         }
@@ -428,12 +499,6 @@ public class MessagingActivity extends Activity{
         public void call(final Object... args) {
             int room = Integer.valueOf(args[0].toString());
             Log.d("Donghwan", "invited to" + room);
-            /*String roomId;
-            try {
-                roomId = data.getString("roomId");
-            } catch (JSONException e) {
-                return;
-            }*/
             mRoomId = room;
             mSocket.emit("join",room);
         }
@@ -462,6 +527,9 @@ public class MessagingActivity extends Activity{
                 case ChatMessage.TYPE_ACTION:
                     layout = R.layout.list_item_chat_action;
                     break;
+                case ChatMessage.TYPE_IMAGE:
+                    layout = R.layout.list_item_chat_message_image;
+                    break;
             }
             View v = LayoutInflater
                     .from(parent.getContext())
@@ -474,6 +542,7 @@ public class MessagingActivity extends Activity{
             ChatMessage message = mMessages.get(position);
             viewHolder.setMessage(message.getMessage());
             viewHolder.setUsername(message.getUsername());
+            viewHolder.setImage(message.getMessage());
         }
 
         @Override
@@ -489,12 +558,13 @@ public class MessagingActivity extends Activity{
         public class ViewHolder extends RecyclerView.ViewHolder {
             private TextView mUsernameView;
             private TextView mMessageView;
-
+            private ImageView mImageView;
             public ViewHolder(View itemView) {
                 super(itemView);
 
                 mUsernameView = (TextView) itemView.findViewById(R.id.username);
                 mMessageView = (TextView) itemView.findViewById(R.id.message);
+                mImageView = (ImageView) itemView.findViewById(R.id.image);
             }
 
             public void setUsername(String username) {
@@ -506,6 +576,11 @@ public class MessagingActivity extends Activity{
             public void setMessage(String message) {
                 if (null == mMessageView) return;
                 mMessageView.setText(message);
+            }
+
+            public void setImage(String url) {
+                if (null == mImageView) return;
+                new DownloadImageTask(MessagingActivity.this, mImageView, true).execute(url);
             }
 
             private int getUsernameColor(String username) {
@@ -520,10 +595,10 @@ public class MessagingActivity extends Activity{
     }
 
 
-    private void insertDB(String id, String name, int roomId, String message){
+    private void insertDB(String id, String name, String type, int roomId, String message){
         ChatDatabaseHelper helper = new ChatDatabaseHelper(mContext,ChatDatabaseHelper.DATABASE_NAME, null, ChatDatabaseHelper.DATABASE_VERSION);
         helper.open();
-        helper.insert(id, name, roomId, message);
+        helper.insert(id, name, type, roomId, message);
         helper.close();
     }
 
@@ -535,9 +610,11 @@ public class MessagingActivity extends Activity{
         cursor.moveToFirst();
 
         while(!cursor.isAfterLast()){
-            String id = cursor.getString(0);
-            String message = cursor.getString(1);
-            addMessage(id,message);
+            String type = cursor.getString(0);
+            String id = cursor.getString(1);
+            String message = cursor.getString(2);
+
+            addMessage(type,id,message);
             cursor.moveToNext();
         }
         if (cursor != null)

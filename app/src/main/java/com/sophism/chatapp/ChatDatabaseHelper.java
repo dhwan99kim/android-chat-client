@@ -29,6 +29,7 @@ public class ChatDatabaseHelper extends SQLiteOpenHelper {
         String sql = "create table " + TABLE_NAME +" (" +
                 "id text, " +
                 "name text, " +
+                "type text, " +
                 "room_id text, " +
                 "message text);";
         db.execSQL(sql);
@@ -37,6 +38,7 @@ public class ChatDatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        Toast.makeText(mContext, "DB onUpgrade", Toast.LENGTH_SHORT).show();
         db.execSQL("DROP TABLE IF EXISTS chat_log");
         onCreate(db);
     }
@@ -48,11 +50,12 @@ public class ChatDatabaseHelper extends SQLiteOpenHelper {
         mDB.close();
     }
 
-    public void insert(String id, String name, int room_id, String message){
+    public void insert(String id, String name, String type, int room_id, String message){
         if (mDB != null) {
             ContentValues values = new ContentValues();
             values.put("id", id);
             values.put("name", name);
+            values.put("type", type);
             values.put("room_id", room_id);
             values.put("message", message);
             mDB.insert(TABLE_NAME, null, values);
@@ -60,7 +63,7 @@ public class ChatDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public Cursor getMessages(int roomId){
-        String sql = "select id, message from " + TABLE_NAME + " where room_id ='"+roomId+ "';";
+        String sql = "select type, id, message from " + TABLE_NAME + " where room_id ='"+roomId+ "';";
         Cursor results = mDB.rawQuery(sql, null);
         return results;
     }

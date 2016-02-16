@@ -28,7 +28,7 @@ public class SocketService extends Service {
     static public Socket mSocket;
     private Context mContext;
     private Handler mHandler;
-    private String mUsername = "sophism";
+    private String mUsername = AppUtil.getInstance().getUserId();
     boolean isDisconnectFirstEvent = true;
     @Override
     public void onCreate() {
@@ -69,16 +69,18 @@ public class SocketService extends Service {
 
                     String username;
                     String message;
+                    String type;
                     int roomId;
                     try {
                         username = data.getString("username");
                         message = data.getString("message");
-                        roomId =  Integer.parseInt(data.getString("roomId"));
+                        type = data.getString("type");
+                        roomId = Integer.parseInt(data.getString("roomId"));
                     } catch (JSONException e) {
                         e.printStackTrace();
                         return;
                     }
-                    insertDB(username, username, roomId, message);
+                    insertDB(username, username, type, roomId, message);
                 }
             };
             mHandler.post(runnable);
@@ -135,6 +137,7 @@ public class SocketService extends Service {
 
         }
     };
+
     @Override
     public void onDestroy() {
         super.onDestroy();
@@ -165,10 +168,10 @@ public class SocketService extends Service {
 
     }
 
-    private void insertDB(String id, String name, int roomId, String message){
+    private void insertDB(String id, String name, String type, int roomId, String message){
         ChatDatabaseHelper helper = new ChatDatabaseHelper(mContext,ChatDatabaseHelper.DATABASE_NAME, null, ChatDatabaseHelper.DATABASE_VERSION);
         helper.open();
-        helper.insert(id, name, roomId, message);
+        helper.insert(id, name, type, roomId, message);
         helper.close();
     }
 }

@@ -4,8 +4,6 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -22,7 +20,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
-import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -30,7 +27,6 @@ import android.widget.Toast;
 import com.github.nkzawa.emitter.Emitter;
 import com.github.nkzawa.socketio.client.Socket;
 import com.sophism.chatapp.data.ChatMessage;
-import com.sophism.chatapp.R;
 import com.squareup.okhttp.OkHttpClient;
 
 import org.json.JSONException;
@@ -45,7 +41,6 @@ import retrofit.RestAdapter;
 import retrofit.RetrofitError;
 import retrofit.client.OkClient;
 import retrofit.client.Response;
-import retrofit.converter.GsonConverter;
 import retrofit.http.Multipart;
 import retrofit.http.POST;
 import retrofit.http.Part;
@@ -580,7 +575,7 @@ public class MessagingActivity extends Activity{
 
             public void setImage(String url) {
                 if (null == mImageView) return;
-                new DownloadImageTask(MessagingActivity.this, mImageView, true).execute(url);
+                new DownloadImageTask(MessagingActivity.this, mImageView, false).execute(url);
             }
 
             private int getUsernameColor(String username) {

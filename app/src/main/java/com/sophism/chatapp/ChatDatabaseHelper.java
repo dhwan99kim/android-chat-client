@@ -64,8 +64,7 @@ public class ChatDatabaseHelper extends SQLiteOpenHelper {
 
     public Cursor getMessages(int roomId){
         String sql = "select type, id, message from " + TABLE_NAME + " where room_id ='"+roomId+ "';";
-        Cursor results = mDB.rawQuery(sql, null);
-        return results;
+        return mDB.rawQuery(sql, null);
     }
 
 }

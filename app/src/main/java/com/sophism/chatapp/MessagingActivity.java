@@ -2,6 +2,7 @@ package com.sophism.chatapp;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
@@ -18,6 +19,7 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -27,6 +29,7 @@ import android.widget.Toast;
 import com.github.nkzawa.emitter.Emitter;
 import com.github.nkzawa.socketio.client.Socket;
 import com.sophism.chatapp.data.ChatMessage;
+import com.sophism.chatapp.view.DialogInputText;
 import com.squareup.okhttp.OkHttpClient;
 
 import org.json.JSONException;
@@ -50,7 +53,7 @@ import retrofit.mime.TypedFile;
 /**
  * Created by D.H.KIM on 2016. 2. 11.
  */
-public class MessagingActivity extends Activity{
+public class MessagingActivity extends Activity implements View.OnClickListener{
 
     private static final String TAG = "Messaging";
     private final int RESULT_LOAD_IMG = 1;
@@ -129,24 +132,42 @@ public class MessagingActivity extends Activity{
         });
 
         ImageView sendButton = (ImageView) findViewById(R.id.send_button);
-        sendButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                attemptSend();
-            }
-        });
+        sendButton.setOnClickListener(this);
 
         ImageView file_upload_btn = (ImageView) findViewById(R.id.file_upload_btn);
-        file_upload_btn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
+        file_upload_btn.setOnClickListener(this);
+
+        ImageView invite_btn = (ImageView) findViewById(R.id.invite_btn);
+        invite_btn.setOnClickListener(this);
+
+        getMessages(mRoomId);
+
+    }
+
+    @Override
+    public void onClick(View v) {
+        switch(v.getId()){
+            case R.id.send_button:
+                attemptSend();
+                break;
+            case R.id.file_upload_btn:
                 Intent galleryIntent = new Intent(Intent.ACTION_PICK,
                         android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
                 startActivityForResult(galleryIntent, RESULT_LOAD_IMG);
-            }
-        });
-        getMessages(mRoomId);
-
+                break;
+            case R.id.invite_btn:
+                final DialogInputText dialogInputText = new DialogInputText(MessagingActivity.this,"초대할 친구 아이디를 입력하세요");
+                dialogInputText.requestWindowFeature(Window.FEATURE_NO_TITLE);
+                dialogInputText.setOnDismissListener(new DialogInterface.OnDismissListener() {
+                    @Override
+                    public void onDismiss(DialogInterface dialog) {
+                        String input = dialogInputText.getValue();
+                        if (input != null && input.length() != 0)
+                            mSocket.emit("invite room", input, mRoomId );
+                    }
+                });
+                dialogInputText.show();
+        }
     }
 
     @Override

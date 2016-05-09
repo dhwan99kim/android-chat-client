@@ -28,10 +28,18 @@ import android.widget.Toast;
 
 import com.github.nkzawa.emitter.Emitter;
 import com.github.nkzawa.socketio.client.Socket;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.places.Place;
+import com.google.android.gms.location.places.Places;
+import com.google.android.gms.location.places.ui.PlacePicker;
+import com.google.android.gms.maps.MapView;
 import com.sophism.chatapp.data.ChatMessage;
 import com.sophism.chatapp.view.DialogInputText;
 import com.squareup.okhttp.OkHttpClient;
+import com.squareup.okhttp.Request;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -53,10 +61,12 @@ import retrofit.mime.TypedFile;
 /**
  * Created by D.H.KIM on 2016. 2. 11.
  */
-public class MessagingActivity extends Activity implements View.OnClickListener{
+public class MessagingActivity extends Activity implements View.OnClickListener,
+        GoogleApiClient.OnConnectionFailedListener, GoogleApiClient.ConnectionCallbacks {
 
     private static final String TAG = "Messaging";
     private final int RESULT_LOAD_IMG = 1;
+    private final int PLACE_PICKER_REQUEST = 2;
 
     private static final int TYPING_TIMER_LENGTH = 600;
     private static final int INVALID = -1;
@@ -71,10 +81,22 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
     private String mUsername = AppUtil.getInstance().getUserId();
     private int mRoomId = INVALID;
     private Socket mSocket = SocketService.mSocket;
+
+    PlacePicker.IntentBuilder builder = new PlacePicker.IntentBuilder();
+    private GoogleApiClient mGoogleApiClient;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         mContext = this;
+        mGoogleApiClient = new GoogleApiClient
+                .Builder(this)
+                .addApi(Places.GEO_DATA_API)
+                .addApi(Places.PLACE_DETECTION_API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+
         util = AppUtil.getInstance();
         setContentView(R.layout.activity_messaging);
         mAdapter = new MessageAdapter(this, mMessages);
@@ -86,6 +108,7 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
         mSocket.on("typing", onTyping);
         mSocket.on("stop typing", onStopTyping);
         mSocket.on("invite", onInvite);
+        mSocket.on("read", onRead);
         mSocket.connect();
 
         int roomID = getIntent().getIntExtra("room",INVALID);
@@ -145,6 +168,43 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
     }
 
     @Override
+    public void onConnectionFailed(ConnectionResult result) {
+        // An unresolvable error has occurred and a connection to Google APIs
+        // could not be established. Display an error message, or handle
+        // the failure silently
+
+        // ...
+    }
+
+    public void onConnectionSuspended(int cause) {
+        mGoogleApiClient.connect();
+    }
+
+    @Override
+    public void onConnected(Bundle connectionHint) {
+        // TODO Auto-generated method stub
+
+    }
+
+    /*@Override
+    public void onDisconnected() {
+        // TODO Auto-generated method stub
+
+    }*/
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        AppDefine.sCurrentRoom = mRoomId;
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        AppDefine.sCurrentRoom = AppDefine.NOT_IN_ROOM;
+    }
+
+    @Override
     public void onClick(View v) {
         switch(v.getId()){
             case R.id.send_button:
@@ -156,7 +216,17 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
                 startActivityForResult(galleryIntent, RESULT_LOAD_IMG);
                 break;
             case R.id.invite_btn:
-                final DialogInputText dialogInputText = new DialogInputText(MessagingActivity.this,"초대할 친구 아이디를 입력하세요");
+
+                PlacePicker.IntentBuilder builder = new PlacePicker.IntentBuilder();
+
+                //Context context = getApplicationContext();
+                try {
+                    startActivityForResult(builder.build(MessagingActivity.this), PLACE_PICKER_REQUEST);
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
+                break;
+                /*final DialogInputText dialogInputText = new DialogInputText(MessagingActivity.this,"초대할 친구 아이디를 입력하세요");
                 dialogInputText.requestWindowFeature(Window.FEATURE_NO_TITLE);
                 dialogInputText.setOnDismissListener(new DialogInterface.OnDismissListener() {
                     @Override
@@ -166,7 +236,7 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
                             mSocket.emit("invite room", input, mRoomId );
                     }
                 });
-                dialogInputText.show();
+                dialogInputText.show();*/
         }
     }
 
@@ -175,7 +245,14 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
         super.onActivityResult(requestCode, resultCode, data);
         try {
             // When an Image is picked
-            if (requestCode == RESULT_LOAD_IMG && resultCode == RESULT_OK
+            if (requestCode == PLACE_PICKER_REQUEST && resultCode == RESULT_OK
+                    && null != data){
+                Place place = PlacePicker.getPlace(data, this);
+                String toastMsg = String.format("Place: %s", place.getName());
+                Toast.makeText(this, toastMsg, Toast.LENGTH_LONG).show();
+                mSocket.emit("new message", MessageType.MAP, place.getLatLng().latitude+"/"+place.getLatLng().longitude, mRoomId);
+            }
+            else if (requestCode == RESULT_LOAD_IMG && resultCode == RESULT_OK
                     && null != data) {
                 Uri selectedImage = data.getData();
                 String[] filePathColumn = { MediaStore.Images.Media.DATA };
@@ -209,9 +286,9 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
                         public void success(Result s, Response response) {
                             try {
                                 String path = AppDefine.CHAT_SERVER_URL+"/files/"+s.url;
-                                mSocket.emit("new message", "image", path, mRoomId);
-                                addMessage("image", mUsername, path);
-                                insertDB(mUsername, mUsername, "image", mRoomId, path);
+                                mSocket.emit("new message", MessageType.IMAGE, path, mRoomId);
+                                //addMessage(MessageType.IMAGE, mUsername, path);
+                                //insertDB(mUsername, mUsername, MessageType.IMAGE , mRoomId, path);
                                 Log.d(TAG, "Success");
                             }catch(Exception e){
                                 e.printStackTrace();
@@ -230,12 +307,12 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
                 }
 
             } else {
-                Toast.makeText(this, "You haven't picked Image",
-                        Toast.LENGTH_LONG).show();
+                /*Toast.makeText(this, "You haven't picked Image",
+                        Toast.LENGTH_LONG).show();*/
             }
         } catch (Exception e) {
             e.printStackTrace();
-            Toast.makeText(this, "Something went wrong", Toast.LENGTH_LONG)
+            Toast.makeText(this, "오류가 발생하였습니다", Toast.LENGTH_LONG)
                     .show();
         }
 
@@ -317,19 +394,34 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
         addLog(numUsers + "명의 참가자가 있습니다");
     }
 
-    private void addMessage( String username, String message) {
-        addMessage("text", username, message);
-    }
-    private void addMessage(String type, String username, String message) {
-        if (type.equals("text")) {
+    /*private void addMessage( String username, String message) {
+        addMessage(MessageType.TEXT, username, message);
+    }*/
+    private void addMessage(String type, String username, String message, int idx, int unread_count) {
+        if (type.equals(MessageType.TEXT)) {
             mMessages.add(new ChatMessage.Builder(ChatMessage.TYPE_MESSAGE)
-                    .username(username).message(message).build());
-        }else if (type.equals("image")){
+                    .username(username).message(message).unreadCount(unread_count).index(idx).build());
+        }else if (type.equals(MessageType.IMAGE)){
             mMessages.add(new ChatMessage.Builder(ChatMessage.TYPE_IMAGE)
-                    .username(username).message(message).build());
+                    .username(username).message(message).unreadCount(unread_count).index(idx).build());
+        }else if (type.equals(MessageType.MAP)){
+            mMessages.add(new ChatMessage.Builder(ChatMessage.TYPE_MAP)
+                    .username(username).message(message).unreadCount(unread_count).index(idx).build());
         }
         mAdapter.notifyItemInserted(mMessages.size() - 1);
         scrollToBottom();
+    }
+
+    private void updateMessage(int idx) {
+        for (int i=0;i<mMessages.size();i++){
+            if (mMessages.get(i).getIndex() == idx){
+                ChatMessage temp = mMessages.get(i);
+                temp.reduceUnreadCount();
+                mMessages.set(i,temp);
+                mAdapter.notifyItemInserted(i);
+            }
+        }
+
     }
 
     private void addTyping(String username) {
@@ -362,11 +454,18 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
         }
 
         mInputMessageView.setText("");
-        addMessage(mUsername, message);
+        //addMessage(mUsername, message);
 
         // perform the sending message attempt.
-        mSocket.emit("new message", "text", message, mRoomId);
-        insertDB(mUsername,mUsername,"text",mRoomId,message);
+        mSocket.emit("new message", MessageType.TEXT, message, mRoomId);
+        /*JSONArray array = new JSONArray();
+        array.put("197");
+        array.put("198");
+        array.put("199");
+        array.put("200");
+
+        mSocket.emit("read", array);*/
+        //insertDB(mUsername, mUsername, MessageType.TEXT, mRoomId, message);
     }
 
     private void leave() {
@@ -395,18 +494,28 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
                     JSONObject data = (JSONObject) args[0];
                     String username, message, type;
                     int roomId;
+                    int unread_count;
+                    int idx;
                     try {
                         username = data.getString("username");
                         message = data.getString("message");
                         type = data.getString("type");
                         roomId = Integer.parseInt(data.getString("roomId"));
+                        unread_count = Integer.parseInt(data.getString("unread_count"));
+                        idx = Integer.parseInt(data.getString("idx"));
                     } catch (JSONException e) {
                         e.printStackTrace();
                         return;
                     }
+                    if (!username.equals(mUsername)) {
+                        JSONArray array = new JSONArray();
+                        array.put(idx);
+                        mSocket.emit("read", array);
+                    }
+
                     removeTyping(username);
                     if (roomId == mRoomId) {
-                        addMessage(type, username, message);
+                        addMessage(type, username, message, idx, unread_count);
                     }
                 }
             });
@@ -506,7 +615,7 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
             if (!mTyping) return;
 
             mTyping = false;
-            mSocket.emit("stop typing",mRoomId);
+            mSocket.emit("stop typing", mRoomId);
         }
     };
 
@@ -520,6 +629,19 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
         }
     };
 
+    private Emitter.Listener onRead = new Emitter.Listener() {
+        @Override
+        public void call(final Object... args) {
+            int idx = Integer.valueOf(args[0].toString());
+            Log.d("Donghwan", "message read" + idx);
+            Log.d(TAG, "getMessage;");
+            ChatDatabaseHelper helper = new ChatDatabaseHelper(mContext,ChatDatabaseHelper.DATABASE_NAME, null, ChatDatabaseHelper.DATABASE_VERSION);
+            helper.open();
+            helper.reduceUnreadCount(idx);
+            helper.close();
+            updateMessage(idx);
+        }
+    };
     public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHolder> {
 
         private List<ChatMessage> mMessages;
@@ -546,6 +668,9 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
                 case ChatMessage.TYPE_IMAGE:
                     layout = R.layout.list_item_chat_message_image;
                     break;
+                case ChatMessage.TYPE_MAP:
+                    layout = R.layout.list_item_chat_message_map;
+                    break;
             }
             View v = LayoutInflater
                     .from(parent.getContext())
@@ -557,8 +682,10 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
         public void onBindViewHolder(ViewHolder viewHolder, int position) {
             ChatMessage message = mMessages.get(position);
             viewHolder.setMessage(message.getMessage());
+            viewHolder.setUnreadCount(message.getUnreadCount());
             viewHolder.setUsername(message.getUsername());
             viewHolder.setImage(message.getMessage());
+            viewHolder.setMap(message.getMessage());
         }
 
         @Override
@@ -575,12 +702,16 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
             private TextView mUsernameView;
             private TextView mMessageView;
             private ImageView mImageView;
+            private ImageView mMapView;
+
+            private TextView mUnreadCountView;
             public ViewHolder(View itemView) {
                 super(itemView);
-
+                mUnreadCountView = (TextView) itemView.findViewById(R.id.unread_count);
                 mUsernameView = (TextView) itemView.findViewById(R.id.username);
                 mMessageView = (TextView) itemView.findViewById(R.id.message);
                 mImageView = (ImageView) itemView.findViewById(R.id.image);
+                mMapView = (ImageView) itemView.findViewById(R.id.map);
             }
 
             public void setUsername(String username) {
@@ -594,9 +725,26 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
                 mMessageView.setText(message);
             }
 
+            public void setUnreadCount(int count) {
+                if (null == mUnreadCountView) return;
+                mUnreadCountView.setText(Integer.toString(count));
+            }
+
             public void setImage(String url) {
                 if (null == mImageView) return;
                 new DownloadImageTask(MessagingActivity.this, mImageView, false).execute(url);
+            }
+
+            public void setMap(String loc) {
+                String[] data = loc.split("/");
+                if (null == mMapView) return;
+
+                Log.d(TAG,"data1 : "+data[0]);
+                Log.d(TAG,"data1 : "+data[1]);
+                String url = "https://maps.googleapis.com/maps/api/staticmap?size=400x400&"
+                + "markers=color:blue|"+data[0]+","+data[1]+"&key="+AppDefine.GOOGLE_API_KEY;
+
+                new DownloadImageTask(MessagingActivity.this, mMapView, false).execute(url);
             }
 
             private int getUsernameColor(String username) {
@@ -611,12 +759,12 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
     }
 
 
-    private void insertDB(String id, String name, String type, int roomId, String message){
+    /*private void insertDB(String id, String name, String type, int roomId, String message){
         ChatDatabaseHelper helper = new ChatDatabaseHelper(mContext,ChatDatabaseHelper.DATABASE_NAME, null, ChatDatabaseHelper.DATABASE_VERSION);
         helper.open();
-        helper.insert(id, name, type, roomId, message);
+        helper.insert(id, name, type, roomId, message, 1, -1);
         helper.close();
-    }
+    }*/
 
     private void getMessages(int roomId){
         Log.d(TAG,"getMessage;");
@@ -629,8 +777,16 @@ public class MessagingActivity extends Activity implements View.OnClickListener{
             String type = cursor.getString(0);
             String id = cursor.getString(1);
             String message = cursor.getString(2);
+            int idx = cursor.getInt(4);
+            if (cursor.getInt(3) == 0){
+                JSONArray array = new JSONArray();
+                array.put(idx);
+                mSocket.emit("read", array);
+                helper.setReadCheck(idx);
+            }
 
-            addMessage(type,id,message);
+            int unread_cnt = cursor.getInt(5);
+            addMessage(type,id,message,idx,unread_cnt);
             cursor.moveToNext();
         }
         if (cursor != null)

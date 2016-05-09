@@ -28,12 +28,14 @@ public class SocketService extends Service {
     static public Socket mSocket;
     private Context mContext;
     private Handler mHandler;
-    private String mUsername = AppUtil.getInstance().getUserId();
+    private String mUsername;
     boolean isDisconnectFirstEvent = true;
     @Override
     public void onCreate() {
         super.onCreate();
         mContext = this;
+        AppUtil.init(mContext);
+        mUsername = AppUtil.getInstance().getUserId();
         mHandler = new Handler();
         Toast.makeText(this, "Create Socket Service", Toast.LENGTH_SHORT).show();
     }
@@ -47,6 +49,7 @@ public class SocketService extends Service {
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
+        mSocket.off();
         mSocket.on("new message", onNewMessage);
         mSocket.on(Socket.EVENT_DISCONNECT, onDisconnect);
         mSocket.on(Socket.EVENT_CONNECT_ERROR, onConnectError);
@@ -71,16 +74,20 @@ public class SocketService extends Service {
                     String message;
                     String type;
                     int roomId;
+                    int unread_count;
+                    int idx;
                     try {
                         username = data.getString("username");
                         message = data.getString("message");
                         type = data.getString("type");
                         roomId = Integer.parseInt(data.getString("roomId"));
+                        unread_count = Integer.parseInt(data.getString("unread_count"));
+                        idx = Integer.parseInt(data.getString("idx"));
                     } catch (JSONException e) {
                         e.printStackTrace();
                         return;
                     }
-                    insertDB(username, username, type, roomId, message);
+                    insertDB(username, username, type, roomId, message, 0, idx, unread_count);
                 }
             };
             mHandler.post(runnable);
@@ -168,10 +175,10 @@ public class SocketService extends Service {
 
     }
 
-    private void insertDB(String id, String name, String type, int roomId, String message){
+    private void insertDB(String id, String name, String type, int roomId, String message, int read, int idx, int unread_count){
         ChatDatabaseHelper helper = new ChatDatabaseHelper(mContext,ChatDatabaseHelper.DATABASE_NAME, null, ChatDatabaseHelper.DATABASE_VERSION);
         helper.open();
-        helper.insert(id, name, type, roomId, message);
+        helper.insert(id, name, type, roomId, message, read, idx, unread_count);
         helper.close();
     }
 }

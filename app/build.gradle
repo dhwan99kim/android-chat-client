@@ -6,8 +6,8 @@ android {
 
     defaultConfig {
         applicationId "com.sophism.chatapp"
-        minSdkVersion 16
-        targetSdkVersion 23
+        minSdkVersion 21
+        targetSdkVersion 21
         versionCode 1
         versionName "1.0"
     }
@@ -27,4 +27,5 @@ dependencies {
     compile 'com.squareup.retrofit:retrofit:1.9.0'
     compile 'com.squareup.okhttp:okhttp:2.7.2'
     compile 'com.github.nkzawa:socket.io-client:0.3.0'
+    compile 'com.google.android.gms:play-services:8.4.0'
 }

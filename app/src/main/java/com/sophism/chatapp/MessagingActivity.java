@@ -82,13 +82,18 @@ public class MessagingActivity extends Activity implements View.OnClickListener,
     private int mRoomId = INVALID;
     private Socket mSocket = SocketService.mSocket;
 
+    ChatDatabaseHelper mDBHelper;
+
     PlacePicker.IntentBuilder builder = new PlacePicker.IntentBuilder();
     private GoogleApiClient mGoogleApiClient;
+
+    private boolean isFront = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         mContext = this;
+        mDBHelper = new ChatDatabaseHelper(mContext,ChatDatabaseHelper.DATABASE_NAME, null, ChatDatabaseHelper.DATABASE_VERSION);
         mGoogleApiClient = new GoogleApiClient
                 .Builder(this)
                 .addApi(Places.GEO_DATA_API)
@@ -103,10 +108,10 @@ public class MessagingActivity extends Activity implements View.OnClickListener,
         mSocket.on(Socket.EVENT_CONNECT_ERROR, onConnectError);
         mSocket.on(Socket.EVENT_CONNECT_TIMEOUT, onConnectError);
         mSocket.on("new message", onNewMessage);
-        mSocket.on("user joined", onUserJoined);
-        mSocket.on("user left", onUserLeft);
-        mSocket.on("typing", onTyping);
-        mSocket.on("stop typing", onStopTyping);
+        //mSocket.on("user joined", onUserJoined);
+        //mSocket.on("user left", onUserLeft);
+        //mSocket.on("typing", onTyping);
+        //mSocket.on("stop typing", onStopTyping);
         mSocket.on("invite", onInvite);
         mSocket.on("read", onRead);
         mSocket.connect();
@@ -196,12 +201,32 @@ public class MessagingActivity extends Activity implements View.OnClickListener,
     protected void onResume() {
         super.onResume();
         AppDefine.sCurrentRoom = mRoomId;
+        isFront = true;
+
+        for (int i=0;i<mMessages.size();i++){
+            ChatMessage message = mMessages.get(i);
+            if (!message.getRead()){
+                int idx = message.getIndex();
+                message.setRead();
+                mDBHelper.open();
+                mDBHelper.setReadCheck(idx);
+                message.reduceUnreadCount();
+                mMessages.set(i,message);
+
+                JSONArray array = new JSONArray();
+                array.put(idx);
+
+                mSocket.emit("read", mRoomId, array);
+            }
+
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         AppDefine.sCurrentRoom = AppDefine.NOT_IN_ROOM;
+        isFront = false;
     }
 
     @Override
@@ -397,7 +422,7 @@ public class MessagingActivity extends Activity implements View.OnClickListener,
     /*private void addMessage( String username, String message) {
         addMessage(MessageType.TEXT, username, message);
     }*/
-    private void addMessage(String type, String username, String message, int idx, int unread_count) {
+    private void addMessage(String type, String username, String message, int idx, boolean read, int unread_count) {
         if (type.equals(MessageType.TEXT)) {
             mMessages.add(new ChatMessage.Builder(ChatMessage.TYPE_MESSAGE)
                     .username(username).message(message).unreadCount(unread_count).index(idx).build());
@@ -412,15 +437,25 @@ public class MessagingActivity extends Activity implements View.OnClickListener,
         scrollToBottom();
     }
 
-    private void updateMessage(int idx) {
+    private void reduceUnreadCount(int idx) {
         for (int i=0;i<mMessages.size();i++){
             if (mMessages.get(i).getIndex() == idx){
                 ChatMessage temp = mMessages.get(i);
                 temp.reduceUnreadCount();
-                mMessages.set(i,temp);
-                mAdapter.notifyItemInserted(i);
+                mMessages.set(i, temp);
+                final int pos = i;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mAdapter.notifyItemChanged(pos);
+                    }
+                });
+
             }
         }
+        mDBHelper.open();
+        mDBHelper.reduceUnreadCount(idx);
+        mDBHelper.close();
 
     }
 
@@ -507,16 +542,21 @@ public class MessagingActivity extends Activity implements View.OnClickListener,
                         e.printStackTrace();
                         return;
                     }
-                    if (!username.equals(mUsername)) {
+                    if (roomId == mRoomId) {
+                        addMessage(type, username, message, idx, isFront, unread_count);
+                    }
+
+                    if (!username.equals(mUsername) && isFront) {
                         JSONArray array = new JSONArray();
                         array.put(idx);
-                        mSocket.emit("read", array);
+
+                        mSocket.emit("read", roomId, array);
+
+                        reduceUnreadCount(idx);
                     }
 
                     removeTyping(username);
-                    if (roomId == mRoomId) {
-                        addMessage(type, username, message, idx, unread_count);
-                    }
+
                 }
             });
         }
@@ -632,14 +672,20 @@ public class MessagingActivity extends Activity implements View.OnClickListener,
     private Emitter.Listener onRead = new Emitter.Listener() {
         @Override
         public void call(final Object... args) {
-            int idx = Integer.valueOf(args[0].toString());
-            Log.d("Donghwan", "message read" + idx);
-            Log.d(TAG, "getMessage;");
-            ChatDatabaseHelper helper = new ChatDatabaseHelper(mContext,ChatDatabaseHelper.DATABASE_NAME, null, ChatDatabaseHelper.DATABASE_VERSION);
-            helper.open();
-            helper.reduceUnreadCount(idx);
-            helper.close();
-            updateMessage(idx);
+            try{
+                if (args[0] instanceof JSONObject){
+                    JSONObject json = (JSONObject) args[0];
+                    JSONArray array = json.getJSONArray("idx");
+                    for (int i=0;i<array.length();i++) {
+                        int idx = Integer.valueOf((Integer)array.get(i));
+                        reduceUnreadCount(idx);
+                    }
+                }
+            }catch (Exception e){
+                e.printStackTrace();
+            }
+
+
         }
     };
     public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHolder> {
@@ -736,9 +782,8 @@ public class MessagingActivity extends Activity implements View.OnClickListener,
             }
 
             public void setMap(String loc) {
-                String[] data = loc.split("/");
                 if (null == mMapView) return;
-
+                String[] data = loc.split("/");
                 Log.d(TAG,"data1 : "+data[0]);
                 Log.d(TAG,"data1 : "+data[1]);
                 String url = "https://maps.googleapis.com/maps/api/staticmap?size=400x400&"
@@ -778,15 +823,18 @@ public class MessagingActivity extends Activity implements View.OnClickListener,
             String id = cursor.getString(1);
             String message = cursor.getString(2);
             int idx = cursor.getInt(4);
+            int unread_cnt = cursor.getInt(5);
             if (cursor.getInt(3) == 0){
                 JSONArray array = new JSONArray();
                 array.put(idx);
-                mSocket.emit("read", array);
+                mSocket.emit("read", roomId, array);
                 helper.setReadCheck(idx);
-            }
-
-            int unread_cnt = cursor.getInt(5);
-            addMessage(type,id,message,idx,unread_cnt);
+                if (unread_cnt>0)
+                    addMessage(type, id, message, idx, true, unread_cnt - 1);
+                else
+                    addMessage(type, id, message, idx, true, 0);
+            }else
+                addMessage(type,id,message,idx, true, unread_cnt);
             cursor.moveToNext();
         }
         if (cursor != null)

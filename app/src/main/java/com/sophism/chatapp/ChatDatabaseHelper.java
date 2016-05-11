@@ -15,7 +15,7 @@ public class ChatDatabaseHelper extends SQLiteOpenHelper {
 
     public static final String TAG = "ChatDatabaseHelper";
     public static final String DATABASE_NAME = "chat.db";
-    public static final int DATABASE_VERSION = 3;
+    public static final int DATABASE_VERSION = 7;
     private static final String TABLE_NAME = "chat_log";
     private static SQLiteDatabase mDB;
     private Context mContext;
@@ -82,9 +82,12 @@ public class ChatDatabaseHelper extends SQLiteOpenHelper {
 
         while(!cursor.isAfterLast()){
             int unread_cnt = cursor.getInt(0);
-            ContentValues values = new ContentValues();
-            values.put("unread_count",unread_cnt-1);
-            mDB.update(TABLE_NAME,values,"idx =?",new String[]{Integer.toString(idx)});
+            if (unread_cnt >0) {
+                ContentValues values = new ContentValues();
+                values.put("unread_count", unread_cnt - 1);
+                mDB.update(TABLE_NAME, values, "idx =?", new String[]{Integer.toString(idx)});
+            }
+            cursor.moveToNext();
         }
         if (cursor != null)
             cursor.close();

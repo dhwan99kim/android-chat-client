@@ -16,6 +16,7 @@ public class ChatMessage {
     private String mUsername;
     private int mIndex;
     private int mUnreadCount;
+    private boolean mRead;
 
     private ChatMessage() {}
 
@@ -39,8 +40,17 @@ public class ChatMessage {
         return mUnreadCount;
     };
 
+    public boolean getRead() {
+        return mRead;
+    };
+
+    public void setRead() {
+        mRead = true;
+    }
+
     public void reduceUnreadCount(){
-        mUnreadCount--;
+        if (mUnreadCount>0)
+            mUnreadCount--;
     }
 
     public static class Builder {
@@ -49,7 +59,7 @@ public class ChatMessage {
         private String mMessage;
         private int mIndex;
         private int mUnreadCount;
-
+        private boolean mRead;
         public Builder(int type) {
             mType = type;
         }
@@ -61,6 +71,11 @@ public class ChatMessage {
 
         public Builder message(String message) {
             mMessage = message;
+            return this;
+        }
+
+        public Builder read(boolean read) {
+            mRead = read;
             return this;
         }
 
@@ -79,6 +94,7 @@ public class ChatMessage {
             message.mType = mType;
             message.mUsername = mUsername;
             message.mMessage = mMessage;
+            message.mRead = mRead;
             message.mUnreadCount = mUnreadCount;
             message.mIndex = mIndex;
             return message;

@@ -87,7 +87,10 @@ public class SocketService extends Service {
                         e.printStackTrace();
                         return;
                     }
-                    insertDB(username, username, type, roomId, message, 0, idx, unread_count);
+                    if (username.equals(mUsername))
+                        insertDB(username, username, type, roomId, message, 1, idx, unread_count);
+                    else
+                        insertDB(username, username, type, roomId, message, 0, idx, unread_count);
                 }
             };
             mHandler.post(runnable);

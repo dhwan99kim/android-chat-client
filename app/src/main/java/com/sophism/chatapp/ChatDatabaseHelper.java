@@ -99,4 +99,19 @@ public class ChatDatabaseHelper extends SQLiteOpenHelper {
         values.put("read", 1);
         mDB.update(TABLE_NAME,values,"idx =?",new String[]{Integer.toString(idx)});
     }
+
+    public int getUnreadCount(String roomId){
+        String sql = "SELECT read from " + TABLE_NAME + " WHERE room_id ='"+roomId+ "' AND read = '0' ;";
+        Cursor cursor = mDB.rawQuery(sql, null);
+        cursor.moveToFirst();
+
+        int unreadCount=0;
+        while(!cursor.isAfterLast()){
+            unreadCount++;
+            cursor.moveToNext();
+        }
+        if (cursor != null)
+            cursor.close();
+        return unreadCount;
+    }
 }

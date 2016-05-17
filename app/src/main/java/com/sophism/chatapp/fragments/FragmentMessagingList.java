@@ -16,6 +16,7 @@ import android.widget.TextView;
 import com.github.nkzawa.emitter.Emitter;
 import com.github.nkzawa.socketio.client.Socket;
 import com.sophism.chatapp.AppUtil;
+import com.sophism.chatapp.ChatDatabaseHelper;
 import com.sophism.chatapp.MessagingActivity;
 import com.sophism.chatapp.R;
 import com.sophism.chatapp.SocketService;
@@ -41,17 +42,22 @@ public class FragmentMessagingList extends Fragment {
     private final String TAG = "ChatMessagingList";
     private AppUtil util;
     private ArrayList<MessagingRoomInfo> mRoomList;
+    private ArrayList<Integer> mUnreadCounts;
     private RoomListAdapter mAdapter;
     private Socket mSocket = SocketService.mSocket;
+    private ChatDatabaseHelper mDBHelper;
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        mDBHelper = new ChatDatabaseHelper(getActivity(),ChatDatabaseHelper.DATABASE_NAME, null, ChatDatabaseHelper.DATABASE_VERSION);
         util = AppUtil.getInstance();
         ViewGroup rootView = (ViewGroup) inflater.inflate(R.layout.fragment_messaging_room_list, container, false);
         mRoomList = new ArrayList<>();
+        mUnreadCounts = new ArrayList<>();
         ListView listview_friend = (ListView) rootView.findViewById(R.id.listview_messaging_room);
+        getRoomList();
+
         mAdapter = new RoomListAdapter(getActivity());
         listview_friend.setAdapter(mAdapter);
-        getRoomList();
         mSocket.on("open room", onOpenRoom);
         mSocket.on("new message", onNewMessage);
         return rootView;
@@ -65,6 +71,13 @@ public class FragmentMessagingList extends Fragment {
                     @Override
                     public void run() {
                         int roomId = Integer.valueOf(args[0].toString());
+                        for (int i=0;i<mRoomList.size();i++){
+                            MessagingRoomInfo info = mRoomList.get(i);
+                            if(info.room_id.equals(Integer.toString(roomId))) {
+                                mUnreadCounts.set(i,0);
+                                mAdapter.notifyDataSetChanged();
+                            }
+                        }
                         Intent intent = new Intent(getActivity(), MessagingActivity.class);
                         intent.putExtra("isFromChatNoti",true);
                         intent.putExtra("room",roomId);
@@ -99,6 +112,7 @@ public class FragmentMessagingList extends Fragment {
                             if(info.room_id.equals(roomId)) {
                                 info.updateMessage(message);
                                 mRoomList.set(i, info);
+                                mUnreadCounts.set(i,mUnreadCounts.get(i)+1);
                             }
                             mAdapter.notifyDataSetChanged();
 
@@ -121,6 +135,7 @@ public class FragmentMessagingList extends Fragment {
                     for (MessagingRoomInfo item:rooms){
                         mRoomList.add(item);
                     }
+                    getUnreadCount();
                     mAdapter.notifyDataSetChanged();
                     Log.d(TAG, "Success");
                 }
@@ -132,6 +147,14 @@ public class FragmentMessagingList extends Fragment {
             });
         }catch (Exception e){
             e.printStackTrace();
+        }
+    }
+
+    private void getUnreadCount(){
+        for (MessagingRoomInfo info:mRoomList){
+            mDBHelper.open();
+            mUnreadCounts.add(mDBHelper.getUnreadCount(info.room_id));
+            mDBHelper.close();
         }
     }
 
@@ -175,25 +198,32 @@ public class FragmentMessagingList extends Fragment {
                 holder.chat_room_name = (TextView) convertView.findViewById(R.id.chat_room_name);
                 holder.chat_last_message = (TextView) convertView.findViewById(R.id.chat_last_message);
                 holder.chat_room_holder = (LinearLayout) convertView.findViewById(R.id.chat_room_holder);
+                holder.chat_room_unread = (TextView) convertView.findViewById(R.id.unread_count);
                 convertView.setTag(holder);
             }else {
                 holder = (ViewHolder) convertView.getTag();
             }
-            holder.chat_room_name.setText(mRoomList.get(position).member);
-            holder.chat_last_message.setText(mRoomList.get(position).message);
+            final MessagingRoomInfo roomInfo = mRoomList.get(position);
+            holder.chat_room_name.setText(roomInfo.member);
+            holder.chat_last_message.setText(roomInfo.message);
             holder.chat_room_holder.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    mSocket.emit("invite",mRoomList.get(position).member);
+                    mSocket.emit("invite", roomInfo.member);
 
                 }
             });
+            if (mUnreadCounts.get(position) == 0)
+                holder.chat_room_unread.setVisibility(View.GONE);
+            else
+                holder.chat_room_unread.setText(Integer.toString(mUnreadCounts.get(position)));
             return convertView;
         }
 
         class ViewHolder {
             TextView chat_room_name;
             TextView chat_last_message;
+            TextView chat_room_unread;
             LinearLayout chat_room_holder;
         }
     }

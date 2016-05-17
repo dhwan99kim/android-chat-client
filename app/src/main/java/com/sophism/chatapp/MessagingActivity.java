@@ -210,6 +210,7 @@ public class MessagingActivity extends Activity implements View.OnClickListener,
                 message.setRead();
                 mDBHelper.open();
                 mDBHelper.setReadCheck(idx);
+                mDBHelper.close();
                 message.reduceUnreadCount();
                 mMessages.set(i,message);
 
@@ -677,7 +678,7 @@ public class MessagingActivity extends Activity implements View.OnClickListener,
                     JSONObject json = (JSONObject) args[0];
                     JSONArray array = json.getJSONArray("idx");
                     for (int i=0;i<array.length();i++) {
-                        int idx = Integer.valueOf((Integer)array.get(i));
+                        int idx = Integer.valueOf((int)array.get(i));
                         reduceUnreadCount(idx);
                     }
                 }
